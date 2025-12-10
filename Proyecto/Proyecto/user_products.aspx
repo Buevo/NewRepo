@@ -4,372 +4,362 @@
 <html lang="es">
 <head>
     <meta charset="utf-8" />
+    <title>Productos — Usuario</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Portal Inventario — Productos (Usuario)</title>
-
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" />
-
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet" />
     <style>
-        
-        body {
-            padding-top: 65px; 
-            background: #f8f9fa;
-        }
-
-       
-        .product-card {
-            cursor: pointer;
-            transition: transform .08s ease;
-        }
-        .product-card:hover {
-            transform: translateY(-3px);
-        }
-
-        
-        .thumb {
-            max-height: 140px;
-            object-fit: cover;
-            border-radius: 4px;
-        }
-
-        
-        .no-ops {
-            pointer-events: none;
-            opacity: 0.95;
-        }
+        body { padding: 24px; }
+        .card-columns { column-count: 2; }
+        .product-card { margin-bottom: 18px; }
+        .product-meta { font-size: 0.95rem; color: #555; }
+        .card-actions { margin-top: 8px; }
+        .modal-lg { max-width: 900px; }
     </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
-
 <body>
-
-    <!-- Barra de navegación -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="#">Portal Inventario</a>
-
-            <!-- Nombre del usuario + botón salir -->
-            <div class="d-flex">
-                <span class="navbar-text me-3">Usuario: <strong id="navUser">Invitado</strong></span>
-                <button class="btn btn-sm btn-light" id="btnLogout">Cerrar sesión</button>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>Productos</h2>
+            <div>
+                <button id="btnLogout" class="btn btn-danger">Cerrar sesión</button>
             </div>
         </div>
-    </nav>
 
-    <div class="container my-4">
-
-        <!-- Título -->
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="mb-0">Productos</h4>
-        </div>
-
-        <!-- Buscador -->
         <div class="row mb-3">
             <div class="col-md-6">
-                <div class="input-group">
-                    <input id="txtSearch" class="form-control" placeholder="Buscar por código o descripción">
-                    <button class="btn btn-outline-secondary" id="btnSearch">Buscar</button>
-                </div>
+                <input id="txtFilter" class="form-control" placeholder="Buscar por código o descripción..." />
+            </div>
+            <div class="col-auto">
+                <button id="btnSearch" class="btn btn-secondary">Buscar</button>
+                <button id="btnClear" class="btn btn-light">Limpiar</button>
             </div>
         </div>
 
-        <!-- Grid de productos -->
-        <div id="productsGrid" class="row g-3"></div>
+        <div id="alertPlaceholder"></div>
 
-        <div id="productsMsg" class="mt-3 small text-muted"></div>
+        <!-- Aquí se renderizan las tarjetas -->
+        <div id="cardsContainer" class="card-columns"></div>
     </div>
 
+    <!-- Modal Archivos (reutilizable) -->
+    <div class="modal fade" id="filesModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 id="filesModalLabel" class="modal-title">Archivos</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="hfFileProductoId" value="0" />
+            <div class="mb-3">
+              <form id="frmUploadFile" onsubmit="return false;">
+                <div class="form-row align-items-center">
+                  <div class="col-auto">
+                  
+                  </div>
 
-    <!-- Modal para archivos -->
-    <div class="modal fade" id="modalFiles" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
-            <div class="modal-content">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">Archivos — <span id="filesTitle"></span></h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-
-                <div class="modal-body">
-                    <!-- Aquí se cargan los archivos del producto -->
-                    <div id="filesContainer" class="row gy-3"></div>
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                </div>
-
+              </form>
             </div>
+
+            <table class="table table-sm table-bordered" id="tblFiles">
+              <thead class="thead-light">
+                <tr>
+                  <th>Nombre</th>
+                  <th>Tamaño (bytes)</th>
+                  <th>Fecha</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- llenado por JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+          </div>
         </div>
+      </div>
     </div>
 
     <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
 
-        // URL base para descargar archivos
-        const DOWNLOAD_URL = '/DownloadFile.ashx?id=';
+        function downloadFiles(idArchivo, fileName) {
+            const url = `DownloadHandler.ashx?id=${idArchivo}&file=${encodeURIComponent(fileName)}`;
+            window.location.href = url;
+        }
 
-        // API (en demo no se usa porque todo es local)
-        const LIST_FILES_API = '/FilesHandler.ashx?action=list&idProduct=';
+        $(function () {
+            // Forzar envío de cookies/credenciales para AJAX/fetch
+            $.ajaxSetup({ xhrFields: { withCredentials: true } });
 
-        // Lista DEMO de productos (en producción esto vendría desde SQL Server)
-        let products = [
-            { IdProducto: 1, Codigo: 'P001', Descripcion: 'Cafetera Eléctrica', Precio: 49.99, Stock: 15 },
-            { IdProducto: 2, Codigo: 'P002', Descripcion: 'Taladro Inalámbrico', Precio: 89.50, Stock: 8 },
-            { IdProducto: 3, Codigo: 'P003', Descripcion: 'Juego de Destornilladores', Precio: 19.90, Stock: 40 }
-        ];
+            const $cards = $("#cardsContainer");
+            const $filter = $("#txtFilter");
 
-        // Archivos DEMO por producto
-        const demoFiles = {
-            1: [
-                {
-                    IdArchivo: 101, NombreVisible: 'Manual - Cafetera.pdf', NombreFisico: 'caf_manual.pdf',
-                    TipoArchivo: 'application/pdf', TamanoBytes: 245123, FechaSubida: '2025-11-20',
-                    UrlPreview: 'https://via.placeholder.com/400x250?text=Cafetera'
-                },
-                {
-                    IdArchivo: 102, NombreVisible: 'Imagen frontal.jpg', NombreFisico: 'caf_front.jpg',
-                    TipoArchivo: 'image/jpeg', TamanoBytes: 152342, FechaSubida: '2025-11-20',
-                    UrlPreview: 'https://via.placeholder.com/400x250?text=Imagen+1'
-                }
-            ],
-            2: [
-                {
-                    IdArchivo: 201, NombreVisible: 'Ficha tecnica.pdf', NombreFisico: 'taladro_ficha.pdf',
-                    TipoArchivo: 'application/pdf', TamanoBytes: 512000, FechaSubida: '2025-11-18',
-                    UrlPreview: 'https://via.placeholder.com/400x250?text=Ficha'
-                },
-                {
-                    IdArchivo: 202, NombreVisible: 'Imagen.jpg', NombreFisico: 'taladro_img.jpg',
-                    TipoArchivo: 'image/jpeg', TamanoBytes: 204800, FechaSubida: '2025-11-18',
-                    UrlPreview: 'https://via.placeholder.com/400x250?text=Imagen+Taladro'
-                }
-            ],
-            3: [] // Producto sin archivos
-        };
-
-        // Referencias a elementos del DOM
-        const productsGrid = document.getElementById('productsGrid');
-        const modalFilesEl = document.getElementById('modalFiles');
-        const bsModalFiles = new bootstrap.Modal(modalFilesEl);
-
-        /* -----------------------------------------------
-           RENDERIZAR PRODUCTOS EN PANTALLA
-        -------------------------------------------------*/
-        function renderProducts(list) {
-            productsGrid.innerHTML = '';
-
-            // Si no hay productos
-            if (!list || !list.length) {
-                productsGrid.innerHTML = `<div class="col-12"><div class="alert alert-light small mb-0">No hay productos disponibles.</div></div>`;
-                return;
+            function escapeHtml(text) { if (text == null) return ""; return $('<div/>').text(text).html(); }
+            function showAlert(msg, type) {
+                $("#alertPlaceholder").html(`<div class="alert ${type}">${msg}</div>`);
+                setTimeout(() => $("#alertPlaceholder").html(""), 4500);
             }
 
-            // Recorrer lista de productos
-            for (const p of list) {
-
-                // Contenedor de producto
-                const col = document.createElement('div');
-                col.className = 'col-12 col-md-6 col-lg-4';
-
-                // Tarjeta del producto
-                col.innerHTML = `
-        <div class="card product-card shadow-sm">
-          <div class="row g-0">
-
-            <!-- Imagen (placeholder) -->
-            <div class="col-4 d-flex align-items-center justify-content-center p-2">
-              <img src="https://via.placeholder.com/220x140?text=${encodeURIComponent(p.Codigo)}"
-                   alt="${escapeHtml(p.Descripcion)}"
-                   class="img-fluid thumb" />
-            </div>
-
-            <div class="col-8">
-              <div class="card-body py-2">
-
-                <!-- Descripción -->
-                <h6 class="card-title mb-1">${escapeHtml(p.Descripcion)}</h6>
-
-                <!-- Código -->
-                <div class="small text-muted">Código: ${escapeHtml(p.Codigo)}</div>
-
-                <!-- Precio + botones -->
-                <div class="mt-2 d-flex justify-content-between align-items-center">
-                  <div><strong>L. ${Number(p.Precio).toFixed(2)}</strong></div>
-
-                  <div>
-                    <!-- Botón abrir archivos -->
-                    <button class="btn btn-sm btn-outline-primary"
-                            onclick="openFiles(${p.IdProducto}, '${escapeJs(p.Descripcion)}')">
-                      Ver archivos
-                    </button>
-
-                    <!-- Botón descargar todos -->
-                    <button class="btn btn-sm btn-outline-secondary"
-                            onclick="downloadAll(${p.IdProducto})"
-                            ${hasFiles(p.IdProducto) ? '' : 'disabled'}>
-                      Descargar
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Stock -->
-                <div class="small text-muted mt-2">Stock: ${p.Stock}</div>
-
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-
-                productsGrid.appendChild(col);
-            }
-        }
-
-
-        /* Funciones auxiliares */
-        function escapeHtml(str = '') {
-            return String(str)
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;');
-        }
-
-        function escapeJs(str = '') {
-            return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"');
-        }
-
-        // Saber si un producto tiene archivos
-        function hasFiles(productId) {
-            const arr = demoFiles[productId] || [];
-            return arr.length > 0;
-        }
-
-
-        /* -------------------------------------------------
-           ABRIR MODAL DE ARCHIVOS POR PRODUCTO
-        ---------------------------------------------------*/
-        function openFiles(productId, productName) {
-
-            document.getElementById('filesTitle').innerText = productName + ` (ID ${productId})`;
-            const container = document.getElementById('filesContainer');
-            container.innerHTML = '';
-
-            const files = demoFiles[productId] || [];
-
-            // Si NO tiene archivos
-            if (!files.length) {
-                container.innerHTML = `<div class="col-12"><div class="alert alert-info small mb-0">No hay archivos disponibles para este producto.</div></div>`;
-                bsModalFiles.show();
-                return;
-            }
-
-            // Recorrer archivos y mostrarlos
-            for (const f of files) {
-
-                const isImage = f.TipoArchivo?.startsWith('image/');
-
-                const col = document.createElement('div');
-                col.className = 'col-12 col-md-6';
-
-                col.innerHTML = `
-        <div class="d-flex bg-white p-3 rounded shadow-sm align-items-center">
-
-          <!-- Vista previa -->
-          <div class="me-3" style="width:150px; flex:0 0 150px;">
-            ${isImage
-                        ? `<img src="${f.UrlPreview}" class="img-fluid rounded thumb" />`
-                        : `<div class="d-flex align-items-center justify-content-center bg-light rounded" style="height:110px;">
-                   <svg width="48" height="48" fill="none" stroke="currentColor">
-                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                     <path d="M14 2v6h6"></path>
-                   </svg>
-                 </div>`
+            // Cargar productos (reusa WebMethod GetProducts)
+            function loadProducts() {
+                const filtro = $filter.val();
+                $.ajax({
+                    url: "products.aspx/GetProducts",
+                    method: "POST",
+                    contentType: "application/json; charset=utf-8",
+                    data: JSON.stringify({ filtro: filtro }),
+                    success: function (res) {
+                        const payload = res && res.d ? res.d : res;
+                        if (!payload || !payload.success) {
+                            showAlert("No se pudieron cargar productos: " + (payload && payload.message ? payload.message : ''), "alert-danger");
+                            renderCards([]);
+                            return;
+                        }
+                        renderCards(payload.data || []);
+                    },
+                    error: function (xhr) {
+                        console.error("GetProducts ERROR", xhr.status, xhr.responseText);
+                        showAlert("Error al cargar productos (" + xhr.status + ")", "alert-danger");
+                        renderCards([]);
                     }
-          </div>
-
-          <!-- Info del archivo -->
-          <div class="flex-grow-1">
-            <div class="fw-semibold">${escapeHtml(f.NombreVisible)}</div>
-
-            <div class="small text-muted">
-              Tipo: ${escapeHtml(f.TipoArchivo)} — ${formatSize(f.TamanoBytes)} — Subido: ${f.FechaSubida}
-            </div>
-
-            <div class="mt-2">
-              <!-- Descargar archivo -->
-              <a class="btn btn-sm btn-outline-primary"
-                 href="${DOWNLOAD_URL}${f.IdArchivo}"
-                 target="_blank">Descargar</a>
-
-              <!-- Abrir imagen -->
-              ${isImage ? `<button class="btn btn-sm btn-outline-secondary ms-2"
-                                   onclick="window.open('${f.UrlPreview}','_blank')">Abrir imagen</button>` : ''}
-            </div>
-          </div>
-
-        </div>
-      `;
-
-                container.appendChild(col);
+                });
             }
 
-            bsModalFiles.show();
-        }
+            // Render tarjetas (cards)
+            function renderCards(items) {
+                $cards.empty();
+                if (!items || items.length === 0) {
+                    $cards.append(`<div class="text-muted">No hay productos</div>`);
+                    return;
+                }
 
-
-        /* --------------------------------------------------
-           DESCARGAR TODOS LOS ARCHIVOS DEL PRODUCTO
-        -----------------------------------------------------*/
-        function downloadAll(productId) {
-            const files = demoFiles[productId] || [];
-            if (!files.length) return alert('No hay archivos para descargar.');
-
-            // Abrir todos los links en nuevas pestañas
-            for (const f of files) {
-                window.open(DOWNLOAD_URL + f.IdArchivo, '_blank');
+                items.forEach(i => {
+                    const card = $(`
+                    <div class="card product-card">
+                      <div class="card-body">
+                        <h5 class="card-title">${escapeHtml(i.Codigo)} — ${escapeHtml(i.Descripcion)}</h5>
+                        <p class="product-meta">
+                          <strong>Precio:</strong> ${(i.Precio || 0).toFixed(2)} &nbsp; | &nbsp;
+                          <strong>Stock:</strong> ${i.Stock || 0}
+                        </p>
+                        <div class="card-actions">
+                          <button class="btn btn-sm btn-outline-primary btn-files" data-id="${i.IdProducto}" data-nombre="${escapeHtml(i.Descripcion)}">Archivos</button>
+                        </div>
+                      </div>
+                    </div>`);
+                    $cards.append(card);
+                });
             }
-        }
 
+            // eventos UI
+            $("#btnSearch").on('click', loadProducts);
+            $("#btnClear").on('click', function () { $filter.val(''); loadProducts(); });
 
-        /* Formato tamaño de archivo */
-        function formatSize(bytes) {
-            if (!bytes) return '-';
-            const kb = bytes / 1024;
-            if (kb < 1024) return `${kb.toFixed(1)} KB`;
-            return `${(kb / 1024).toFixed(2)} MB`;
-        }
+            // Archivos modal
+            window.openFilesModal = function (idProducto, nombreProducto) {
+                $("#filesModalLabel").text("Archivos de: " + (nombreProducto || ("#" + idProducto)));
+                $("#hfFileProductoId").val(idProducto);
+                $("#fileInput").val('');
+                $("#txtNombreVisible").val('');
+                loadFilesByProduct(idProducto);
+                $("#filesModal").modal('show');
+            };
 
+            // Delegación: botón archivos en tarjetas
+            $cards.on('click', '.btn-files', function () {
+                const id = $(this).data('id');
+                const nombre = $(this).data('nombre') || '';
+                openFilesModal(id, nombre);
+            });
 
-        /* --------------------------------------
-           EVENTO DEL BUSCADOR
-        -----------------------------------------*/
-        document.getElementById('btnSearch').addEventListener('click', () => {
-            const q = document.getElementById('txtSearch').value.trim().toLowerCase();
+            // Cargar archivos por producto (ListFiles.ashx -> JSON)
+            function loadFilesByProduct(idProducto) {
+                const tbody = $("#tblFiles tbody");
+                tbody.html('<tr><td colspan="4" class="text-center">Cargando...</td></tr>');
+                fetch('ListFiles.ashx?IdProducto=' + encodeURIComponent(idProducto), { credentials: 'same-origin' })
+                    .then(r => {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.json();
+                    })
+                    .then(data => {
+                        tbody.empty();
+                        if (!data || data.length === 0) {
+                            tbody.html('<tr><td colspan="4" class="text-center">No hay archivos.</td></tr>');
+                            return;
+                        }
+                        data.forEach(f => {
+                            const tr = $('<tr>');
+                            tr.append(`<td>${escapeHtml(f.NombreVisible)}</td>`);
+                            tr.append(`<td>${f.TamanoBytes || 0}</td>`);
+                            tr.append(`<td>${f.FechaSubida || ''}</td>`);
+                            const actions = $('<td>');
+                            actions.append(` <button class="btn btn-sm btn-outline-primary mr-1"
+         onclick="downloadFiles(${idProducto}, '${f.NombreFisico}')">
+     Descargar
+ </button>`)
+                            tr.append(actions);
+                            tbody.append(tr);
+                        });
+                    })
+                    .catch(err => {
+                        tbody.html('<tr><td colspan="4" class="text-center text-danger">Error al cargar archivos.</td></tr>');
+                        console.error(err);
+                    });
+            }
 
-            // Si la búsqueda está vacía, Mostrar todo
-            if (!q) { renderProducts(products); return; }
+            // Download file (POST -> handler) - si falla intenta GET (compatibilidad)
+            window.downloadFile = function (idArchivo) {
+                if (!idArchivo) { alert('IdArchivo inválido'); return; }
 
-            // Filtrar por código o descripción
-            renderProducts(products.filter(p =>
-                (p.Codigo + ' ' + p.Descripcion).toLowerCase().includes(q)
-            ));
+                const url = '/DownloadHandler.ashx';
+
+                // Post con FormData (como UploadHandler)
+                const fd = new FormData();
+                fd.append('idArchivo', idArchivo);
+
+                fetch(url, {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'same-origin' // enviar cookies de sesión
+                })
+                    .then(async response => {
+                        // Si falla, tratar de parsear JSON con mensaje
+                        if (!response.ok) {
+                            const txt = await response.text();
+                            try {
+                                const parsed = JSON.parse(txt);
+                                alert('Error: ' + (parsed.message || txt));
+                                console.error('Download error (json):', parsed);
+                            } catch (e) {
+                                alert('Error al descargar (HTTP ' + response.status + ')');
+                                console.error('Download error (text):', txt);
+                            }
+                            return;
+                        }
+
+                        // Si el handler devolvió JSON (por ejemplo debug o error), mostrarlo
+                        const ct = response.headers.get('Content-Type') || '';
+                        if (ct.indexOf('application/json') !== -1) {
+                            const data = await response.json();
+                            alert('Respuesta: ' + (data.message || JSON.stringify(data)));
+                            console.log('Download JSON response:', data);
+                            return;
+                        }
+
+                        // Es binario: construir blob y forzar descarga
+                        const blob = await response.blob();
+                        const disposition = response.headers.get('Content-Disposition') || '';
+                        let filename = 'archivo';
+
+                        // Extraer filename del header si viene
+                        const match = /filename\*?=(?:UTF-8'')?["']?([^;"']+)/i.exec(disposition);
+                        if (match && match[1]) {
+                            try { filename = decodeURIComponent(match[1]); } catch (e) { filename = match[1]; }
+                        } else {
+                            filename = 'archivo_' + idArchivo;
+                        }
+
+                        const link = document.createElement('a');
+                        const blobUrl = window.URL.createObjectURL(blob);
+                        link.href = blobUrl;
+                        link.download = filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                        window.URL.revokeObjectURL(blobUrl);
+                    })
+                    .catch(err => {
+                        console.error('Fetch download failed', err);
+                        alert('Error al descargar el archivo. Revisa la consola.');
+                    });
+            };
+
+            // Upload via FormData (si quieres permitir que usuarios suban archivos, dejamos la misma lógica)
+            $("#btnUploadFile").on('click', function (e) {
+                e.preventDefault();
+                const input = document.getElementById('fileInput');
+                if (!input.files || input.files.length === 0) { alert('Selecciona un archivo.'); return; }
+                const idProducto = $("#hfFileProductoId").val();
+                const fd = new FormData();
+                fd.append('IdProducto', idProducto);
+                fd.append('NombreVisible', $("#txtNombreVisible").val() || input.files[0].name);
+                fd.append('file', input.files[0]);
+
+                fetch('UploadHandler.ashx', { method: 'POST', body: fd, credentials: 'same-origin' })
+                    .then(r => {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.json();
+                    })
+                    .then(res => {
+                        if (res && res.success) {
+                            alert(res.message || 'Subido');
+                            input.value = '';
+                            loadFilesByProduct(idProducto);
+                        } else {
+                            alert('Error al subir: ' + (res && res.message ? res.message : 'Error'));
+                        }
+                    })
+                    .catch(err => {
+                        alert('Error al subir archivo');
+                        console.error(err);
+                    });
+            });
+
+            // Logout (AJAX -> webmethod logout on products.aspx)
+            $("#btnLogout").on("click", function () {
+                if (!confirm('¿Cerrar sesión y volver al login?')) return;
+
+                fetch('products.aspx/Logout', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}'
+                })
+                    .then(async res => {
+                        if (!res.ok) {
+                            const t = await res.text();
+                            console.error('Logout HTTP error', res.status, t);
+                            alert('Error al cerrar sesión (HTTP ' + res.status + '). Revisa la consola.');
+                            return;
+                        }
+                        const payload = await res.json();
+                        const result = payload && payload.d ? payload.d : payload;
+                        if (!result || !result.success) {
+                            alert('No se pudo cerrar sesión: ' + (result && result.message ? result.message : 'Error desconocido'));
+                            return;
+                        }
+                        try {
+                            document.cookie.split(";").forEach(function (c) {
+                                if (!c) return;
+                                var parts = c.split("=");
+                                var name = parts.shift().trim();
+                                if (!name) return;
+                                document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;";
+                                document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=" + location.hostname + ";";
+                            });
+                        } catch (e) {
+                            console.warn('No se pudieron borrar cookies desde JS (esto puede ser normal si son HttpOnly):', e);
+                        }
+                        window.location.href = 'login.aspx';
+                    })
+                    .catch(err => {
+                        console.error('Logout failed', err);
+                        alert('Error al cerrar sesión. Revisa la consola.');
+                    });
+            });
+
+            // Inicializar
+            loadProducts();
         });
-
-
-        /* --------------------------------------
-           EVENTO CERRAR SESIÓN
-        -----------------------------------------*/
-        document.getElementById('btnLogout').addEventListener('click', () => {
-            window.location.href = 'login.aspx';
-        });
-
-
-        /* Render inicial */
-        renderProducts(products);
-
     </script>
 </body>
 </html>

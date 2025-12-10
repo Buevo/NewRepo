@@ -121,7 +121,6 @@
     <Content Include="Content\Site.css" />
     <Content Include="Default.aspx" />
     <Content Include="favicon.ico" />
-    <Content Include="Global.asax" />
     <Content Include="login.aspx" />
     <Content Include="products.aspx" />
     <Content Include="Services.asmx" />
@@ -156,6 +155,7 @@
     <Content Include="Content\bootstrap-grid.css.map" />
     <Content Include="ListFiles.ashx" />
     <Content Include="DownloadHandler.ashx" />
+    <Content Include="DeleteHandler.ashx" />
     <None Include="Scripts\jquery-3.7.0.intellisense.js" />
     <Content Include="Scripts\jquery-3.7.0.js" />
     <Content Include="Scripts\jquery-3.7.0.min.js" />
@@ -221,11 +221,11 @@
     <Compile Include="Default.aspx.designer.cs">
       <DependentUpon>Default.aspx</DependentUpon>
     </Compile>
+    <Compile Include="DeleteHandler.ashx.cs">
+      <DependentUpon>DeleteHandler.ashx</DependentUpon>
+    </Compile>
     <Compile Include="DownloadHandler.ashx.cs">
       <DependentUpon>DownloadHandler.ashx</DependentUpon>
-    </Compile>
-    <Compile Include="Global.asax.cs">
-      <DependentUpon>Global.asax</DependentUpon>
     </Compile>
     <Compile Include="ListFiles.ashx.cs">
       <DependentUpon>ListFiles.ashx</DependentUpon>

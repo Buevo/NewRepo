@@ -10,13 +10,13 @@ using System.Data.SqlClient;
 using System.Web.Services;
 using System.Web.Script.Services;
 
-
-
 namespace Proyecto
 {
     public partial class products : System.Web.UI.Page
     {
+        // Nombre de la cadena de conexión en web.config
         private readonly string _cnxName = "CnxVanguardia3";
+
         protected void Page_Load(object sender, EventArgs e)
         {
             if (!IsPostBack)
@@ -47,9 +47,10 @@ namespace Proyecto
         public static object GetProducts(string filtro)
         {
             var list = new List<Dictionary<string, object>>();
-            var cnxName = "CnxVanguardia3";
-            using (var cn = new SqlConnection(ConfigurationManager.ConnectionStrings[cnxName].ConnectionString))
+            var cnxName = "CnxVanguardia3"; // campo estático por WebMethod
+            try
             {
+                using (var cn = new SqlConnection(ConfigurationManager.ConnectionStrings[cnxName].ConnectionString))
                 using (var cmd = new SqlCommand("dbo.sp_GetProducts", cn))
                 {
                     cmd.CommandType = CommandType.StoredProcedure;
@@ -62,18 +63,23 @@ namespace Proyecto
                             var row = new Dictionary<string, object>
                             {
                                 ["IdProducto"] = rdr.GetInt32(rdr.GetOrdinal("IdProducto")),
-                                ["Codigo"] = rdr.GetString(rdr.GetOrdinal("Codigo")),
-                                ["Descripcion"] = rdr.GetString(rdr.GetOrdinal("Descripcion")),
-                                ["Precio"] = rdr.GetDecimal(rdr.GetOrdinal("Precio")),
-                                ["Stock"] = rdr.GetInt32(rdr.GetOrdinal("Stock")),
-                                ["Activo"] = rdr.GetBoolean(rdr.GetOrdinal("Activo"))
+                                ["Codigo"] = rdr["Codigo"] as string ?? "",
+                                ["Descripcion"] = rdr["Descripcion"] as string ?? "",
+                                ["Precio"] = rdr["Precio"] == DBNull.Value ? 0m : rdr.GetDecimal(rdr.GetOrdinal("Precio")),
+                                ["Stock"] = rdr["Stock"] == DBNull.Value ? 0 : rdr.GetInt32(rdr.GetOrdinal("Stock")),
+                                ["Activo"] = rdr["Activo"] == DBNull.Value ? false : rdr.GetBoolean(rdr.GetOrdinal("Activo"))
                             };
                             list.Add(row);
                         }
                     }
                 }
+
+                return new { success = true, data = list };
             }
-            return new { success = true, data = list };
+            catch (Exception ex)
+            {
+                return new { success = false, message = ex.Message };
+            }
         }
 
         [WebMethod(EnableSession = true)]
@@ -81,8 +87,9 @@ namespace Proyecto
         public static object GetProductById(int idProducto)
         {
             var cnxName = "CnxVanguardia3";
-            using (var cn = new SqlConnection(ConfigurationManager.ConnectionStrings[cnxName].ConnectionString))
+            try
             {
+                using (var cn = new SqlConnection(ConfigurationManager.ConnectionStrings[cnxName].ConnectionString))
                 using (var cmd = new SqlCommand("dbo.sp_GetProductById", cn))
                 {
                     cmd.CommandType = CommandType.StoredProcedure;
@@ -105,8 +112,13 @@ namespace Proyecto
                         }
                     }
                 }
+
+                return new { success = false, message = "Producto no encontrado" };
             }
-            return new { success = false, message = "Producto no encontrado" };
+            catch (Exception ex)
+            {
+                return new { success = false, message = ex.Message };
+            }
         }
 
         [WebMethod(EnableSession = true)]
@@ -202,6 +214,34 @@ namespace Proyecto
             }
         }
 
-        #endregion
-    }
+        [WebMethod(EnableSession = true)]
+        [ScriptMethod(ResponseFormat = ResponseFormat.Json)]
+        public static object Logout()
+        {
+            try
+            {
+                HttpContext.Current.Session.Clear();
+                HttpContext.Current.Session.Abandon();
+
+                var authCookie = new HttpCookie("AuthUser", "");
+                authCookie.Expires = DateTime.UtcNow.AddDays(-7);
+                authCookie.Path = "/";
+                HttpContext.Current.Response.Cookies.Add(authCookie);
+
+                var sessionCookie = new HttpCookie("ASP.NET_SessionId", "");
+                sessionCookie.Expires = DateTime.UtcNow.AddDays(-7);
+                sessionCookie.Path = "/";
+                HttpContext.Current.Response.Cookies.Add(sessionCookie);
+
+                return new { success = true };
+            }
+            catch (Exception ex)
+            {
+                return new { success = false, message = ex.Message };
+            }
+        }
+            #endregion
+        }
 }
+
+       
